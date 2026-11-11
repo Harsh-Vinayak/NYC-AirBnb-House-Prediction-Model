@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>StayType AI · NYC Airbnb Room Classifier</title>
+  <meta name="description" content="Predict whether an NYC Airbnb listing is an entire home or a private room." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <canvas id="bg" aria-hidden="true"></canvas>
+  <div class="aurora" aria-hidden="true"></div>
+
+  <header class="topbar">
+    <div class="brand">
+      <span class="logo" aria-hidden="true">
+        <svg viewBox="0 0 32 32"><path d="M4 15 16 5l12 10v11a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><circle cx="16" cy="19" r="3" fill="currentColor"/></svg>
+      </span>
+      <div>
+        <h1>StayType <em>AI</em></h1>
+        <p>NYC Airbnb room-type classifier</p>
+      </div>
+    </div>
+    <div class="api">
+      <button type="button" id="apiStatus" class="pill" aria-haspopup="true" aria-expanded="false">
+        <span class="dot" id="apiDot"></span><span id="apiLabel">Checking API…</span>
+      </button>
+      <div class="api-pop" id="apiPop" hidden>
+        <label for="apiUrl">Backend URL</label>
+        <div class="row">
+          <input id="apiUrl" type="text" spellcheck="false" />
+          <button type="button" id="apiSave" class="btn-ghost">Save</button>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <main class="layout">
+    <!-- ───────────── FORM ───────────── -->
+    <form id="form" class="card form-card" novalidate>
+      <div class="card-head">
+        <h2>Describe the listing</h2>
+        <div class="presets" role="group" aria-label="Try an example">
+          <span>Try:</span>
+          <button type="button" class="chip-sm" data-preset="studio">Williamsburg loft</button>
+          <button type="button" class="chip-sm" data-preset="room">Harlem room</button>
+          <button type="button" class="chip-sm" data-preset="midtown">Midtown pad</button>
+        </div>
+      </div>
+
+      <fieldset>
+        <legend><span class="step">01</span> Where is it?</legend>
+        <div class="chips" id="boroughChips" role="radiogroup" aria-label="Borough"></div>
+        <div class="chips sub" id="hoodChips" role="radiogroup" aria-label="Neighbourhood"></div>
+
+        <details class="fine">
+          <summary>Fine-tune coordinates</summary>
+          <div class="grid2">
+            <label class="field"><span>Latitude</span>
+              <input type="number" id="latitude" step="0.0001" min="-90" max="90" required /></label>
+            <label class="field"><span>Longitude</span>
+              <input type="number" id="longitude" step="0.0001" min="-180" max="180" required /></label>
+          </div>
+        </details>
+      </fieldset>
+
+      <fieldset>
+        <legend><span class="step">02</span> Price &amp; stay rules</legend>
+        <div class="slider-field">
+          <div class="slider-top"><label for="price">Price per night</label>
+            <div class="num"><b>$</b><input type="number" id="price" min="1" step="1" required /></div></div>
+          <input type="range" id="priceR" min="10" max="1000" step="1" />
+        </div>
+        <div class="slider-field">
+          <div class="slider-top"><label for="minimum_nights">Minimum nights</label>
+            <div class="num"><input type="number" id="minimum_nights" min="1" max="365" step="1" required /></div></div>
+          <input type="range" id="minimum_nightsR" min="1" max="60" step="1" />
+        </div>
+        <div class="slider-field">
+          <div class="slider-top"><label for="availability_365">Days available / year</label>
+            <div class="num"><input type="number" id="availability_365" min="0" max="365" step="1" required /></div></div>
+          <input type="range" id="availability_365R" min="0" max="365" step="1" />
+        </div>
+      </fieldset>
+
+      <fieldset>
+        <legend><span class="step">03</span> Reviews &amp; host</legend>
+        <div class="grid3">
+          <label class="field"><span>Total reviews</span>
+            <input type="number" id="number_of_reviews" min="0" step="1" required /></label>
+          <label class="field"><span>Reviews / month</span>
+            <input type="number" id="reviews_per_month" min="0" step="0.01" required /></label>
+          <label class="field"><span>Host's listings</span>
+            <input type="number" id="calculated_host_listings_count" min="0" step="1" required /></label>
+        </div>
+      </fieldset>
+
+      <p class="error" id="formError" role="alert" hidden></p>
+
+      <button type="submit" id="submitBtn" class="cta">
+        <span class="cta-label">Classify listing</span>
+        <span class="cta-spin" aria-hidden="true"></span>
+        <svg class="cta-arrow" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14m-6-6 6 6-6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </button>
+    </form>
+
+    <!-- ───────────── RESULT ───────────── -->
+    <section class="side">
+      <div class="card result-card" id="resultCard" data-state="idle" aria-live="polite">
+        <div class="radar" aria-hidden="true">
+          <svg viewBox="0 0 300 220" id="radarSvg">
+            <defs>
+              <radialGradient id="rg" cx="50%" cy="50%" r="50%">
+                <stop offset="0" stop-color="var(--accent)" stop-opacity=".25"/>
+                <stop offset="1" stop-color="var(--accent)" stop-opacity="0"/>
+              </radialGradient>
+            </defs>
+            <rect width="300" height="220" fill="url(#rg)"/>
+            <g class="grid-lines" id="gridLines"></g>
+            <g class="rings">
+              <circle cx="150" cy="110" r="40"/><circle cx="150" cy="110" r="80"/><circle cx="150" cy="110" r="120"/>
+            </g>
+            <g class="sweep"><path d="M150 110 L150 -10 A120 120 0 0 1 254 50 Z" fill="url(#rg)"/></g>
+            <g id="hoodDots"></g>
+            <g id="marker" class="marker" transform="translate(150 110)">
+              <circle class="ping" r="6"/><circle class="ping p2" r="6"/><circle class="core" r="5"/>
+            </g>
+          </svg>
+          <span class="radar-tag" id="radarTag">Select a neighbourhood</span>
+        </div>
+
+        <!-- idle -->
+        <div class="state state-idle">
+          <h3>Awaiting listing data</h3>
+          <p>Fill in the form and hit <b>Classify</b> — a Random Forest trained on ~49k NYC listings will decide if it's an <b>entire place</b> or a <b>private room</b>.</p>
+        </div>
+
+        <!-- loading -->
+        <div class="state state-loading">
+          <h3>Analysing<span class="dots"><i>.</i><i>.</i><i>.</i></span></h3>
+          <ul class="steps-list">
+            <li>Encoding location</li><li>Weighing price &amp; availability</li><li>Polling 100 decision trees</li>
+          </ul>
+        </div>
+
+        <!-- result -->
+        <div class="state state-result">
+          <div class="verdict">
+            <div class="ring-wrap">
+              <svg viewBox="0 0 120 120" class="ring">
+                <circle class="track" cx="60" cy="60" r="52"/>
+                <circle class="bar" id="ringBar" cx="60" cy="60" r="52" pathLength="100"/>
+              </svg>
+              <div class="ring-center">
+                <span id="bigPct">0</span><small>%</small>
+              </div>
+            </div>
+            <div class="verdict-text">
+              <span class="eyebrow">Predicted room type</span>
+              <h3 id="verdictName">—</h3>
+              <p id="verdictBlurb"></p>
+            </div>
+          </div>
+
+          <div class="bars" id="bars"></div>
+          <p class="conf" id="confNote"></p>
+        </div>
+        <div class="state state-error">
+          <h3>Couldn't reach the model</h3>
+          <p id="errMsg"></p>
+          <button type="button" class="btn-ghost" id="retryBtn">Try again</button>
+        </div>
+      </div>
+
+      <div class="card history-card">
+        <div class="card-head"><h2>Recent predictions</h2><button type="button" class="btn-ghost sm" id="clearHist">Clear</button></div>
+        <ul id="history" class="history"><li class="empty">Nothing yet — your last 5 predictions land here.</li></ul>
+      </div>
+    </section>
+  </main>
+
+  <footer class="foot">Random Forest · scikit-learn pipeline · FastAPI</footer>
+
+  <script src="script.js"></script>
+</body>
+</html>
