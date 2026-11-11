@@ -2,7 +2,7 @@
 "use strict";
 
 /* ───────── config ───────── */
-const DEFAULT_API = "http://127.0.0.1:8000";
+const DEFAULT_API = "https://nyc-airbnb-house-prediction-model.onrender.com";
 
 /* The pickled pipeline was trained on exactly these values (see OneHotEncoder categories). */
 const LOCATIONS = {
