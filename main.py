@@ -1,25 +1,30 @@
-from fastapi import FastAPI
-import pandas as pd
+from pathlib import Path
+
 import joblib
-from pydantic import BaseModel, Field
+import pandas as pd
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel, Field
 
 app = FastAPI()
 
 app.add_middleware(
-     CORSMiddleware,
+    CORSMiddleware,
     allow_origins=["*"],
     allow_methods=["*"],
-    allow_headers=["*"]
+    allow_headers=["*"],
 )
 
-COLUMNS = ['neighbourhood_group', 'neighbourhood', 'latitude', 'longitude',
-           'room_type', 'price', 'minimum_nights', 'number_of_reviews',
-           'reviews_per_month', 'calculated_host_listings_count',
-           'availability_365']
+COLUMNS = [
+    "neighbourhood_group", "neighbourhood", "latitude", "longitude",
+    "price", "minimum_nights", "number_of_reviews", "reviews_per_month",
+    "calculated_host_listings_count", "availability_365",
+]
 
-model = joblib.load(r"c:\Users\harsh\Classification Project\Model_Pipeline.pkl")
-model = joblib.load("Model_Pipeline.pkl")
+# Load the model from the same folder as this file (works on Windows and Render)
+MODEL_PATH = Path(__file__).parent / "Model_Pipeline.pkl"
+model = joblib.load(MODEL_PATH)
+
 
 class Features(BaseModel):
     latitude: float = Field(..., ge=-90, le=90, description="Latitude coordinate")
@@ -33,18 +38,20 @@ class Features(BaseModel):
     neighbourhood_group: str = Field(..., min_length=1, description="Borough or neighbourhood group")
     neighbourhood: str = Field(..., min_length=1, description="Specific neighbourhood name")
 
-@app.get('/')
+
+@app.get("/")
 def greet():
     return "Hello Guyss"
 
-@app.post('/predict')
+
+@app.post("/predict")
 def predict(features: Features):
-    # Using model_dump() for modern Pydantic, wrapped in a list so DataFrame parses correctly
-    row = pd.DataFrame([features.dict()], columns=COLUMNS)
+    row = pd.DataFrame([features.model_dump()], columns=COLUMNS)
     prediction = model.predict(row)
     probability = model.predict_proba(row)
-    
+
     return {
         "Predicted_room_type": prediction[0],
-        "Probability": probability.tolist()[0]
+        "Probability": probability.tolist()[0],
+        "Classes": model.classes_.tolist(),
     }
